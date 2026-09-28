@@ -16,16 +16,21 @@ model PaymentLink {
   payments    Payment[]
 }
 model Payment {
-  id            String        @id @default(cuid())
-  linkId        String
-  link          PaymentLink   @relation(fields: [linkId], references: [id], onDelete: Cascade)
-  amount        Int
-  currency      String        @default("INR")
-  status        String        @default("SUCCEEDED")
-  customerEmail String        @default("guest@novapay.test")
-  createdAt     DateTime      @default(now())
-  refundedAt    DateTime?
-  events        WebhookEvent[]
+  id                String        @id @default(cuid())
+  linkId            String
+  link              PaymentLink   @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  amount            Int
+  currency          String        @default("INR")
+  status            String        @default("PENDING")
+  customerEmail     String        @default("guest@novapay.test")
+  createdAt         DateTime      @default(now())
+  refundedAt        DateTime?
+  paidAt            DateTime?
+  providerOrderId   String?       @unique
+  providerPaymentId String?       @unique
+  providerSignature String?
+  providerRefundId  String?       @unique
+  events            WebhookEvent[]
 }
 model ApiKey {
   id         String   @id @default(cuid())
