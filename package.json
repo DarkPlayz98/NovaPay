@@ -1,6 +1,29 @@
 {
-  "name":"novapay-mvp","version":"0.1.0","private":true,
-  "scripts":{"dev":"next dev -H 0.0.0.0","build":"prisma generate && next build","start":"next start -H 0.0.0.0","db:push":"prisma db push","db:seed":"tsx prisma/seed.ts","lint":"next lint"},
-  "dependencies":{"@prisma/client":"^6.10.1","firebase":"^11.9.0","next":"^15.3.3","react":"^19.1.0","react-dom":"^19.1.0","zod":"^3.25.49"},
-  "devDependencies":{"@types/node":"^22.15.30","@types/react":"^19.1.6","@types/react-dom":"^19.1.6","prisma":"^6.10.1","tsx":"^4.19.4","typescript":"^5.8.3"}
+  "name": "novapay-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "prisma generate && prisma db push && next build",
+    "start": "next start -H 0.0.0.0",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.1",
+    "firebase": "^11.9.0",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.49"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "prisma": "^6.10.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
 }
