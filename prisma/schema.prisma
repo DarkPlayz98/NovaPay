@@ -1,10 +1,12 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 model PaymentLink {
   id          String    @id @default(cuid())
   title       String
@@ -15,6 +17,7 @@ model PaymentLink {
   createdAt   DateTime  @default(now())
   payments    Payment[]
 }
+
 model Payment {
   id                String        @id @default(cuid())
   linkId            String
@@ -22,24 +25,27 @@ model Payment {
   amount            Int
   currency          String        @default("INR")
   status            String        @default("PENDING")
-  customerEmail     String        @default("guest@novapay.test")
+  customerEmail     String        @default("")
   createdAt         DateTime      @default(now())
+  refundRequestedAt DateTime?
   refundedAt        DateTime?
   paidAt            DateTime?
-  providerOrderId   String?       @unique
-  providerPaymentId String?       @unique
-  providerSignature String?
-  providerRefundId  String?       @unique
+  networkIntentId   String?       @unique
+  networkReference  String?       @unique
+  networkSignature  String?
   events            WebhookEvent[]
+  ledgerEntries     LedgerEntry[]
 }
+
 model ApiKey {
   id         String   @id @default(cuid())
   label      String
   prefix     String
   secretHash String
   createdAt  DateTime @default(now())
-  revoked    Boolean  @default(false)
+  revoked   Boolean  @default(false)
 }
+
 model WebhookEvent {
   id        String   @id @default(cuid())
   paymentId String?
@@ -48,4 +54,40 @@ model WebhookEvent {
   payload   Json
   createdAt DateTime @default(now())
   delivered Boolean  @default(false)
+}
+
+model NetworkParticipant {
+  id         String   @id @default(cuid())
+  nodeId     String   @unique
+  name       String
+  publicKey  String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LedgerAccount {
+  id          String        @id @default(cuid())
+  ownerId     String
+  kind        String
+  currency    String        @default("INR")
+  status      String        @default("OPEN")
+  createdAt   DateTime      @default(now())
+  entries     LedgerEntry[]
+}
+
+model LedgerEntry {
+  id         String       @id @default(cuid())
+  accountId  String
+  account    LedgerAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  paymentId  String?
+  payment    Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  direction  String
+  amount     Int
+  currency   String       @default("INR")
+  reference  String
+  createdAt  DateTime     @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([paymentId])
 }
