@@ -1,55 +1,119 @@
-# NovaPay MVP v0.1
-A test-mode-only merchant payment dashboard built with Next.js App Router, TypeScript, Prisma/PostgreSQL and optional Firebase Google sign-in. It does not connect to banks, UPI, card networks, or payment processors and cannot move real money.
+# NovaPay
 
-## Included
-- Responsive merchant dashboard, payment links, hosted simulated checkout
-- Success / pending / failure test outcomes, transaction list, simulated refunds
-- Test API-key creation/revocation (display-only; not yet accepted by an API)
-- Webhook event simulator (records events in DB; does not deliver HTTP callbacks)
-- Optional Firebase Google sign-in UI
+NovaPay is a merchant payment infrastructure project built with Next.js App Router, TypeScript, Prisma/PostgreSQL and optional Firebase sign-in.
 
-## Requirements
-Node.js 20.9+ (Node 22 LTS recommended), npm, and a PostgreSQL database. You can develop on Android with Termux. PostgreSQL itself is easiest to host using a free-tier managed PostgreSQL provider; do not expose database credentials in client code.
+The application is designed around a **NovaPay-owned payment protocol**. It contains no Razorpay SDK, Razorpay API calls, Stripe integration, PayPal integration, hosted third-party checkout, or third-party payment-provider credentials.
 
-## Termux setup
-1. Install Termux from a trusted source, then run:
-```sh
-pkg update -y && pkg upgrade -y
-pkg install nodejs-lts git -y
-node -v
-npm -v
-```
-2. Extract this project, `cd` into `novapay-mvp`, and install:
+## Architecture
+
+- NovaPay payment links
+- NovaPay merchant API keys
+- NovaPay payment intents
+- NovaPay Network settlement confirmation protocol
+- Signed network messages with timestamp replay protection
+- PostgreSQL-backed transaction state
+- Refund request and refund-settlement states
+- Network event/audit records
+- Ledger-account and ledger-entry primitives for future production settlement accounting
+- Optional Firebase authentication UI
+
+## Important
+
+This repository does **not** pretend that a database update equals a real bank settlement.
+
+The checkout can create a live payment intent only when the NovaPay Network is explicitly configured as authorized. A payment is marked successful only after an authenticated NovaPay Network settlement confirmation reaches the server.
+
+There is no fake success button and no simulated payment outcome.
+
+For India, operating a payment system requires the applicable Reserve Bank of India authorization, and the exact activity must be assessed under the Payment and Settlement Systems Act and current RBI directions. Banking and settlement arrangements are also required for real INR movement. Obtain specialist legal/compliance advice before enabling live money movement.
+
+## Environment
+
+Copy `.env.example` to `.env.local`.
+
+Required:
+
+- `DATABASE_URL`
+
+NovaPay Network server configuration:
+
+- `NOVAPAY_NETWORK_ID`
+- `NOVAPAY_NETWORK_STATUS`
+- `NOVAPAY_NETWORK_SHARED_SECRET`
+
+Set `NOVAPAY_NETWORK_STATUS=AUTHORIZED` only after NovaPay has the legal, regulatory, banking and operational authority to perform the intended live settlement activity.
+
+Never expose `NOVAPAY_NETWORK_SHARED_SECRET` to the browser or use a `NEXT_PUBLIC_` prefix.
+
+Firebase variables are optional and are only used for the sign-in UI.
+
+## Database
+
+After updating `prisma/schema.prisma`, apply the SQL in:
+
+`prisma/migrations/001_novapay_network.sql`
+
+Do not reset or drop the production database.
+
+The SQL is written to add the new NovaPay fields/tables without deleting existing records. Legacy provider columns can be removed later in a controlled migration after confirming that no historical data or reporting depends on them.
+
+## Development
+
 ```sh
 npm install
 cp .env.example .env.local
-```
-3. Create a PostgreSQL database with a provider of your choice and paste its connection URL into `DATABASE_URL` in `.env.local`. For local-only UI work, a database is still needed for dashboard data.
-4. Initialize tables and start the app:
-```sh
 npx prisma generate
-npx prisma db push
 npm run dev
 ```
-Open `http://localhost:3000` on the phone. `npm run dev` binds to `0.0.0.0` for device/LAN access.
 
-Optional sample link:
+Open `http://localhost:3000`.
+
+## NovaPay API
+
+Create an API key from the Developers section. The secret is shown once and stored only as a SHA-256 hash.
+
+Example:
+
 ```sh
-npm run db:seed
+curl -X POST https://YOUR-NOVAPAY-DOMAIN/api/v1/payment-links \
+  -H "Authorization: Bearer np_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Order #123","amount":499}'
 ```
 
-## Firebase (optional)
-Create a Firebase project, enable Google provider in Authentication, register a Web app, then copy the API key, Auth domain, Project ID, and App ID into `.env.local` as `NEXT_PUBLIC_FIREBASE_*`. Restart the dev server. Without Firebase config the app operates as a local demo workspace. This MVP currently uses Firebase only for client-side Google sign-in UI; it does not enforce identity on API routes. Do not expose it publicly with real merchant data until server-side Firebase token verification and authorization are implemented.
+Amounts are supplied in INR rupees to the merchant API and stored internally in paise.
 
-## Deploy
-- Push the project to GitHub.
-- Deploy the repository to Vercel using the Next.js preset.
-- Add `DATABASE_URL` and `NEXT_PUBLIC_APP_URL` to Vercel environment variables; add Firebase public config if used.
-- Ensure Prisma client generation runs during build (the package build script does this). Run `npx prisma db push` against the production database from a trusted local environment before first use, or use a controlled migration workflow.
-- Deploy only as a private test/demo until authentication, authorization, rate limiting, CSRF/origin controls, secret handling, auditability, backups, and security review are complete.
+## Network settlement protocol
 
-## Safety / limitations
-- All payment outcomes are simulated. No real payments, refunds, settlement, payment processor integration, or external webhook delivery occur.
-- The dashboard's test API keys are generated and stored as hashes, but API-key authentication is not implemented. The newly generated secret is shown once in the browser.
-- API routes are demo routes without production authentication or rate limiting. Do not use with sensitive or real customer data.
-- For live payment activity in India, obtain legal advice about the exact funds flow and use an appropriately authorized provider/contractual arrangement. This software is not a payment gateway or payment aggregator.
+A NovaPay Network settlement participant confirms a payment by sending the exact JSON body to:
+
+`POST /api/network/settlements/confirm`
+
+Required headers:
+
+- `x-novapay-timestamp`: Unix timestamp in milliseconds
+- `x-novapay-signature`: HMAC-SHA256 of `timestamp + "." + rawBody` using the NovaPay Network shared secret
+
+Example payload:
+
+```json
+{
+  "intentId": "npi_...",
+  "reference": "NOVA-SETTLEMENT-...",
+  "amount": 49900,
+  "currency": "INR",
+  "status": "SETTLED"
+}
+```
+
+NovaPay accepts only recent, correctly signed messages and checks amount/currency against the original payment intent. Repeated confirmations are idempotent.
+
+The refund endpoint uses the same authenticated protocol at:
+
+`POST /api/network/refunds`
+
+## Production security work still required
+
+Before public live use, NovaPay still needs server-side merchant authorization, customer identity controls appropriate to the model, rate limiting, origin/CSRF controls, fraud/risk controls, proper key management, secrets rotation, reconciliation, dispute handling, audit retention, backups, disaster recovery, monitoring, penetration testing, independent security review, and the required regulatory/banking controls.
+
+This repository is the software foundation for that work; it is not itself an RBI authorization or a bank/settlement membership.
